@@ -1,0 +1,205 @@
+{
+   "format_version": 5,
+   "pipelines": {
+      "gcp-comp-test-pipeline": {
+         "group": "defaultGroup",
+         "lock_behavior": "unlockWhenFinished",
+         "materials": {
+            "platform_repository": {
+               "auto_update": true,
+               "branch": "main",
+               "git": "https://github.com/hamidelbagir/gocd",
+               "shallow_clone": false,
+            }
+         },
+         "secure_variables": {
+            "GOCD_GH_GIT_CREDENTIALS": "abc"
+         },
+         "stages": [
+            {
+               "SQLrun": {
+                  "approval": {
+                     "type": "manual"
+                  },
+                  "clean_workspace": false,
+                  "environment_variables": {
+                     "GOOGLE_APPLICATION_CREDENTIALS": "/etc/key.json"
+                  },
+                  "fetch_materials": true,
+                  "jobs": {
+                     "SQLrun": {
+                        "artifacts": [
+                           {
+                              "build": {
+                                 "destination": "",
+                                 "source": "logfile.txt"
+                              }
+                           }
+                        ],
+                        "elastic_profile_id": "v1.5.100",
+                        "tabs": {
+                           "SQLrun": "logfile.txt"
+                        },
+                        "tasks": [
+                           {
+                              "exec": {
+                                 "arguments": [
+                                    "-c",
+                                    "set -x && gcloud auth activate-service-account --key-file=\"$GOOGLE_APPLICATION_CREDENTIALS\" && git config --global credential.helper store  && echo \"$GOCD_GH_GIT_CREDENTIALS\" > ~/.git-credentials  && ls -l && pwd"
+                                 ],
+                                 "command": "bash",
+                                 "run_if": "passed"
+                              }
+                           },
+                           {
+                              "exec": {
+                                 "arguments": [
+                                    "-c",
+                                    "set -x && exec >logfile.txt 2>logfile.txt"
+                                 ],
+                                 "command": "bash",
+                                 "run_if": "passed"
+                              }
+                           },
+                           {
+                              "exec": {
+                                 "arguments": [
+                                    "-c",
+                                    "set -x && export TargetProject=$(echo ${GO_PIPELINE_NAME} | sed -r 's/.{9}//') && echo ${TargetProject} && ls -ltra && pwd && gcloud auth list && echo ' Executing BQ query ' && export TargetProject=$(echo ${GO_PIPELINE_NAME} | sed -r 's/.{9}//') && cat query_cost_v2.sql | bq query --use_legacy_sql=false --format=csv > response.csv --project_id=${TargetProject} && echo ' Finished executing BQ query | Listing files ' && ls -ltra && pwd && echo ' Raw Response ' && cat response.csv && echo ' Cost Report ' && python3 costReport-csv.py --csv_file=response.csv --max_cols=6"
+                                 ],
+                                 "command": "bash",
+                                 "run_if": "passed"
+                              }
+                           },
+                           {
+                              "exec": {
+                                 "arguments": [
+                                    "-c",
+                                    "exec >logfile.txt 2>logfile.txt && echo ' End of Report '"
+                                 ],
+                                 "command": "bash",
+                                 "run_if": "any"
+                              }
+                           },
+                           {
+                              "exec": {
+                                 "arguments": [
+                                    "-c",
+                                    "set -x"
+                                 ],
+                                 "command": "bash",
+                                 "run_if": "any"
+                              }
+                           }
+                        ]
+                     }
+                  },
+                  "keep_artifacts": false
+               }
+            },
+            {
+               "ChangeBilling": {
+                  "approval": {
+                     "type": "manual"
+                  },
+                  "clean_workspace": false,
+                  "environment_variables": {
+                     "GOOGLE_APPLICATION_CREDENTIALS": "/etc/key.json"
+                  },
+                  "fetch_materials": true,
+                  "jobs": {
+                     "ChangeBilling": {
+                        "artifacts": [
+                           {
+                              "build": {
+                                 "destination": "",
+                                 "source": "logfile.txt"
+                              }
+                           }
+                        ],
+                        "elastic_profile_id": "v1.5.100",
+                        "tabs": {
+                           "CompApply": "logfile.txt"
+                        },
+                        "tasks": [
+                           {
+                              "fetch": {
+                                 "destination": "",
+                                 "is_file": true,
+                                 "job": "SQLrun",
+                                 "pipeline": "",
+                                 "run_if": "passed",
+                                 "source": "logfile.txt",
+                                 "stage": "SQLrun"
+                              }
+                           },
+                           {
+                              "exec": {
+                                 "arguments": [
+                                    "-c",
+                                    "set -x && gcloud auth activate-service-account --key-file=\"$GOOGLE_APPLICATION_CREDENTIALS\" && git config --global credential.helper store  && echo \"$GOCD_GH_GIT_CREDENTIALS\" > ~/.git-credentials  && ls -l && pwd"
+                                 ],
+                                 "command": "bash",
+                                 "run_if": "passed"
+                              }
+                           },
+                           {
+                              "exec": {
+                                 "arguments": [
+                                    "-c",
+                                    "exec >logfile.txt 2>logfile.txt && ls -ltra && pwd"
+                                 ],
+                                 "command": "bash",
+                                 "run_if": "passed"
+                              }
+                           },
+                           {
+                              "exec": {
+                                 "arguments": [
+                                    "-c",
+                                    "echo ' Executing change billing script ... ' && export TargetProject=$(echo ${GO_PIPELINE_NAME} | sed -r 's/.{9}//') && echo ${TargetProject} && exclusion_list=$(paste -sd, exclusion_policy/$(echo ${TargetProject})/$(echo ${TargetProject})_policy.list) && echo $exclusion_list && cat exclusion_policy/$(echo ${TargetProject})/$(echo ${TargetProject})_policy.list"
+                                 ],
+                                 "command": "bash",
+                                 "run_if": "passed"
+                              }
+                           },
+                           {
+                              "exec": {
+                                 "arguments": [
+                                    "-c",
+                                    "python3 changeBilling.py $(echo ${GO_PIPELINE_NAME} | sed -r 's/.{9}//')echo \"$exclusion_list\""
+                                 ],
+                                 "command": "bash",
+                                 "run_if": "passed"
+                              }
+                           },
+                           {
+                              "exec": {
+                                 "arguments": [
+                                    "-c",
+                                    "exec >logfile.txt 2>logfile.txt && $(echo ' End of Execution ')"
+                                 ],
+                                 "command": "bash",
+                                 "run_if": "any"
+                              }
+                           },
+                           {
+                              "exec": {
+                                 "arguments": [
+                                    "-c",
+                                    "set -x"
+                                 ],
+                                 "command": "bash",
+                                 "run_if": "any"
+                              }
+                           }
+                        ]
+                     }
+                  },
+                  "keep_artifacts": false
+               }
+            }
+         ]
+      },
+   }
+}

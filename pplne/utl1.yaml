@@ -1,0 +1,65 @@
+{
+  stage(name, requires_approval=true, definition={}): {
+    [name]: {
+      fetch_materials: true,
+      keep_artifacts: false,
+      clean_workspace: false,
+      environment_variables: {
+        GOOGLE_APPLICATION_CREDENTIALS: '/etc/key.json',
+      },
+      approval: { type: if requires_approval then 'manual' else 'success' },
+    } + definition,
+  },
+
+  job(name, profile_id, definition): {
+    [name]: definition {
+      elastic_profile_id: profile_id,
+    },
+  },
+
+  bash_task(commands=[], run_if='passed'): {
+    exec: {
+      run_if: run_if,
+      command: 'bash',
+      arguments: [
+        '-c',
+        std.join(' && ', commands),
+      ],
+    },
+  },
+
+  fetch_task(overrides): {
+    fetch: {
+      is_file: true,
+      source: 'logfile.txt',
+      destination: '',
+      pipeline: '',
+      stage: 'SQLrun',
+      job: 'SQLrun',
+      run_if: 'passed',
+    } + overrides,
+  },
+
+  tasks: {
+    local bash_task_f = $.bash_task,
+    initialize: bash_task_f([
+      'set -x',
+      'gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"',
+      'git config --global credential.helper store ',
+      'echo "$GOCD_GH_GIT_CREDENTIALS" > ~/.git-credentials ',
+      'ls -l',
+      'pwd',
+    ]),
+    cleanup: bash_task_f([
+      'set -x',
+    ], run_if='any'),
+  },
+
+  change_stage(stage_name, artefact): (
+    local add_by_idx(current_idx, my_idx, artefact) = (
+      if current_idx == my_idx then artefact else {}
+    );
+    local map = { SQLrun: 0, apply: 1, test: 2 };
+    { stages: std.mapWithIndex(function(i, v) v + add_by_idx(i, map[stage_name], artefact), super.stages) }
+  ),
+}
