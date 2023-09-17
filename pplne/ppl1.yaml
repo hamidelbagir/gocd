@@ -2,7 +2,7 @@
    "format_version": 5,
    "pipelines": {
       "gcp-comp-test-pipeline": {
-         "group": "defaultGroup",
+         "group": "main",
          "lock_behavior": "unlockWhenFinished",
          "materials": {
             "platform_repository": {
@@ -13,7 +13,7 @@
             }
          },
          "secure_variables": {
-            "GOCD_GH_GIT_CREDENTIALS": "abc"
+            
          },
          "stages": [
             {
